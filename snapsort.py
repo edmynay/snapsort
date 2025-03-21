@@ -168,23 +168,26 @@ def file_move(source_full_file_name, target_user_folder):
                     break
                 i += 1
 
-    # make file creating target dir if needed
-    while True:
-        try:
-            shutil.move(source_full_file_name, target_full_file_name)
-            logging.debug(f'Call shutil.move{str((source_full_file_name, target_full_file_name))}')
-            break
-        except FileNotFoundError as e:
-            if e.errno == errno.ENOENT:
-                os.makedirs(target_folder, exist_ok=True)
-            else:
-                logging.debug(f'Unexpected FileNotFoundError during moving file from\n'
-                              f'{source_full_file_name}\nto\n{target_full_file_name}:\n{traceback.format_exc()}')
+    if os.path.getsize(source_full_file_name) > 0:
+        while True:  # make file creating target dir if needed
+            try:
+                shutil.move(source_full_file_name, target_full_file_name)
+                logging.debug(f'Call shutil.move{str((source_full_file_name, target_full_file_name))}')
+                break
+            except FileNotFoundError as e:
+                if e.errno == errno.ENOENT:
+                    os.makedirs(target_folder, exist_ok=True)
+                else:
+                    logging.debug(f'Unexpected FileNotFoundError during moving file from\n'
+                                  f'{source_full_file_name}\nto\n{target_full_file_name}:\n{traceback.format_exc()}')
+    else:
+        os.remove(source_full_file_name)  # clean 0 size source file as leftover
+
     logging.debug(f'Finish file_move{str((source_full_file_name, target_user_folder))}')
 
 
 def draw_progress_bar(progress, l=40, prefix='', borders='[]', fill='#'):
-    bar_length = int(progress * l)
+    bar_length = int((progress if progress < 1 else 1) * l)
     # Dynamically align the bar to 'l' width
     print(f'\r{prefix}{borders[0]}{fill * bar_length:<{l}}{borders[1]} {progress:.2%}', end='')
 
@@ -235,7 +238,9 @@ if __name__ == '__main__':
     for root, dirs, files in os.walk(source):
         logging.debug(f'Start handling root={root}, dirs={dirs}, files={files}')
         for filename in files:
-            if filename.lower().endswith(MEDIA_FILETYPES):
+            if filename.startswith("._"):  # Skip AppleDouble files
+                continue
+            elif filename.lower().endswith(MEDIA_FILETYPES):
                 file_path = os.path.join(root, filename)
                 logging.debug(f'Copying file: {file_path}')
                 pool.apply_async(file_move, (file_path, target))
