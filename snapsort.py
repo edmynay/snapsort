@@ -46,12 +46,14 @@ import datetime
 import errno
 import logging
 import multiprocessing
-import shutil
 import os
+import re
+import shutil
 from subprocess import check_output
 from threading import Event, Thread
-import traceback
 import time
+import traceback
+
 
 
 MEDIA_FILETYPES = (
@@ -74,8 +76,10 @@ MULTI = True  # better turn off on some network storages
 num_files = 0
 
 
-module_name = os.path.splitext(os.path.basename(__file__))[0]  # # Get the name of the current module, removes the ".py" extension
-log_file = os.path.join(os.path.dirname(__file__), f"{module_name}.log")  # Log file in the same directory
+log_file = os.path.join(os.path.dirname(__file__), "debug.log")  # Log file in the same directory
+
+with open(log_file, 'w') as file:
+    file.truncate(0)
 
 # Configure logging
 logging.basicConfig(
@@ -108,10 +112,27 @@ def file_move(source_full_file_name, target_user_folder):
         printout = check_output(cmd).decode()
         logging.debug(f'exiftool printout:\n{printout}')
 
-        # fetch minimum timestamp from exif printout after Digital Era
-        file_date = min([t for t in [datetime.datetime.strptime(line[34:53],'%Y:%m:%d %H:%M:%S')
-                                     for line in printout.splitlines()]
-                            if t > DIGITAL_ERA_START])
+        # Regex for matching date/time strings like '2019:01:01 11:56:01'
+        date_pattern = re.compile(r'(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})')
+
+        timestamps = []
+        for line in printout.splitlines():
+            match = date_pattern.search(line)
+            if match:
+                date_str = match.group(1)
+                try:
+                    t = datetime.datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S')
+                    if t > DIGITAL_ERA_START:
+                        timestamps.append(t)
+                except ValueError as e:
+                    logging.debug(f"Skipping line (parse error): {line}")
+
+        if timestamps:
+            file_date = min(timestamps)
+            logging.debug(f"Selected file date: {file_date}")
+        else:
+            logging.error("No valid timestamps found after digital era start.")
+            return
 
         # set correct file access and modification time
         # os.utime(source_full_file_name, (datetime.datetime.timestamp(file_date), datetime.datetime.timestamp(file_date)))
@@ -119,7 +140,7 @@ def file_move(source_full_file_name, target_user_folder):
         # file_date = datetime.datetime.fromtimestamp(min(os.path.getctime(source_full_file_name),
         #                                                 os.path.getmtime(source_full_file_name)))
 
-        logging.ERROR(f'Error determining timestamps of the file:\n{source_full_file_name}\n:{traceback.format_exc()}')
+        logging.error(f'Error determining timestamps of the file:\n{source_full_file_name}\n:{traceback.format_exc()}')
         return
 
     target_folder = os.path.join(target_user_folder, str(file_date.year), str(file_date.month))  # Crates yyyy\mm subfolders
@@ -155,7 +176,7 @@ def file_move(source_full_file_name, target_user_folder):
             break
         except FileNotFoundError as e:
             if e.errno == errno.ENOENT:
-                os.makedirs(target_folder)
+                os.makedirs(target_folder, exist_ok=True)
             else:
                 logging.debug(f'Unexpected FileNotFoundError during moving file from\n'
                               f'{source_full_file_name}\nto\n{target_full_file_name}:\n{traceback.format_exc()}')
@@ -209,6 +230,7 @@ if __name__ == '__main__':
     daemon_thread.daemon = True  # Set the thread as a daemon
     daemon_thread.start()
 
+    logging.debug(f'Starting checking files in {source}')
     num_files = 0
     for root, dirs, files in os.walk(source):
         logging.debug(f'Start handling root={root}, dirs={dirs}, files={files}')
