@@ -1,5 +1,6 @@
 intro = r'''
-snapsort (ss)
+snapsort
+(ss)
 
 Functionality:
 Organize your photos and videos by their creation date.
@@ -17,24 +18,26 @@ Prints realtime progress using configurable progress bar.
 WARNING: YOUR FILES WILL BE MOVED FROM SOURCE LOCATION.
          CONSIDER BACKUP CREATION!
 
-Usage:
+Usege:
 1. Install exiftool
-2. Its recommend to create alias in your ~/.bashrc (Linux) or ~/.zshrc (Mac)
-alias ss='python3 /path/to/snapsort.py'
+2. Sort your files:
+python3 /path/to/snapsort.py <output_dir> <input_dir>
+3. Its recommend to create alias in your ~/.bashrc (Linux) or ~/.zshrc (Mac):
+alias ss='python3 /path/to/snapsort.py <output_dir>'
 
 On Windows:
 notepad $PROFILE
-Set-Alias ss "python3 C:\path\to\snapsort.py"
+Set-Alias ss "python3 C:\path\to\snapsort.py <output_dir>"
 
-3. Sort your files:
-ss <input_dir> <output_dir>
+So you can use script as following:
+ss <input_dir>
 
 Positional arguments:
 input_dir      Directory containing unsorted media files.
 output_dir     Directory where sorted files will be placed.
                Hint: use output_dir on same physical disk as input_dir for fast file movement!
 Examples:
-ss ~/Downloads/Camera ~/Pictures/PHOTOS
+ss ~/Pictures/PHOTOS ~/Downloads/Camera
 
 Created on 1 May. 2016
 
@@ -71,8 +74,17 @@ MEDIA_FILETYPES = (
 'wmv',
 )
 
-DIGITAL_ERA_START = datetime.datetime(2002, 1, 1)
+DIGITAL_ERA_START = datetime.datetime(2004, 1, 1)
 MULTI = True  # better turn off on some network storages
+
+# Fields in priority order
+priority_fields = [
+    'Date/Time Original',
+    'File Modification Date/Time',
+    'GPS Date Stamp',
+    'GPS Date/Time',
+    'Create Date'
+]
 num_files = 0
 
 
@@ -113,26 +125,34 @@ def file_move(source_full_file_name, target_user_folder):
         logging.debug(f'exiftool printout:\n{printout}')
 
         # Regex for matching date/time strings like '2019:01:01 11:56:01'
+
         date_pattern = re.compile(r'(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})')
 
-        timestamps = []
-        for line in printout.splitlines():
-            match = date_pattern.search(line)
-            if match:
-                date_str = match.group(1)
-                try:
-                    t = datetime.datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S')
-                    if t > DIGITAL_ERA_START:
-                        timestamps.append(t)
-                except ValueError as e:
-                    logging.debug(f"Skipping line (parse error): {line}")
+        # Initialize
+        selected_date = None
 
-        if timestamps:
-            file_date = min(timestamps)
-            logging.debug(f"Selected file date: {file_date}")
-        else:
-            logging.error("No valid timestamps found after digital era start.")
+        for field in priority_fields:
+            for line in printout.splitlines():
+                if line.strip().startswith(field):
+                    match = date_pattern.search(line)
+                    if match:
+                        date_str = match.group(1)
+                        try:
+                            t = datetime.datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S')
+                            if t > DIGITAL_ERA_START:
+                                file_date = t
+                                logging.debug(f'Selected date from field "{field}": {t}')
+                                break
+                        except ValueError as e:
+                            logging.warning(f"Failed to parse date from field '{field}': {line} -> {e}")
+            if file_date:
+                break
+
+        if not file_date:
+            logging.error(f'No valid timestamp found for {source_full_file_name}')
             return
+        else:
+            logging.debug(f"Selected file date: {file_date}")
 
         # set correct file access and modification time
         # os.utime(source_full_file_name, (datetime.datetime.timestamp(file_date), datetime.datetime.timestamp(file_date)))
@@ -214,8 +234,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description=intro, formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('source', type=str, help='Source directory to copy files from')
     parser.add_argument('target', type=str, help='Target directory to copy files to')
+    parser.add_argument('source', type=str, help='Source directory to copy files from')
+
     args = parser.parse_args()
 
     source = args.source
