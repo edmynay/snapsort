@@ -60,20 +60,20 @@ import traceback
 
 
 MEDIA_FILETYPES = (
-# ---------------------------------- PHOTO -------------------------------------
-'jpg',
-'jpeg',
-'png',
-# 'bmp',
-# 'gif',
-'heic',
-# ---------------------------------- VIDEO -------------------------------------
-'mov',
-'3gp',
-'3gpp',
-'mp4',
-'avi',
-'wmv',
+    # ---------------------------------- PHOTO -------------------------------------
+    'jpg',
+    'jpeg',
+    'png',
+    # 'bmp',
+    # 'gif',
+    'heic',
+    # ---------------------------------- VIDEO -------------------------------------
+    'mov',
+    '3gp',
+    '3gpp',
+    'mp4',
+    'avi',
+    'wmv',
 )
 
 DIGITAL_ERA_START = datetime.datetime(2004, 1, 1)
@@ -127,11 +127,7 @@ def file_move(source_full_file_name, target_user_folder):
         logging.debug(f'exiftool printout:\n{printout}')
 
         # Regex for matching date/time strings like '2019:01:01 11:56:01'
-
         date_pattern = re.compile(r'(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})')
-
-        # Initialize
-        selected_date = None
 
         file_date = None
         for field in priority_fields:
