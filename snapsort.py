@@ -64,7 +64,9 @@ MEDIA_FILETYPES = (
 'jpg',
 'jpeg',
 'png',
-'bmp',
+# 'bmp',
+# 'gif',
+'heic',
 # ---------------------------------- VIDEO -------------------------------------
 'mov',
 '3gp',
@@ -88,7 +90,7 @@ priority_fields = [
 num_files = 0
 
 
-log_file = os.path.join(os.path.dirname(__file__), "debug.log")  # Log file in the same directory
+log_file = os.path.join(os.path.dirname(__file__), "snapsort.log")  # Log file in the same directory
 
 with open(log_file, 'w') as file:
     file.truncate(0)
@@ -131,6 +133,7 @@ def file_move(source_full_file_name, target_user_folder):
         # Initialize
         selected_date = None
 
+        file_date = None
         for field in priority_fields:
             for line in printout.splitlines():
                 if line.strip().startswith(field):
@@ -259,9 +262,11 @@ if __name__ == '__main__':
     for root, dirs, files in os.walk(source):
         logging.debug(f'Start handling root={root}, dirs={dirs}, files={files}')
         for filename in files:
+            logging.debug(f'Iterating on file={filename}')
             if filename.startswith("._"):  # Skip AppleDouble files
                 continue
             elif filename.lower().endswith(MEDIA_FILETYPES):
+                logging.debug(f'Processing file: {filename}')
                 file_path = os.path.join(root, filename)
                 logging.debug(f'Copying file: {file_path}')
                 pool.apply_async(file_move, (file_path, target))
